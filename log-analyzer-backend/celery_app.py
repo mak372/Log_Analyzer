@@ -14,7 +14,7 @@ celery.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
-    imports=['tasks'],  # This tells Celery to import tasks module
+    imports=['tasks'],
     task_always_eager=False,
 )
 
@@ -28,3 +28,4 @@ def make_celery(app):
 
     celery.Task = ContextTask
     return celery
+
