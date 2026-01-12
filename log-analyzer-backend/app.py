@@ -5,6 +5,7 @@ from flask import request, jsonify,session,make_response
 from functools import wraps
 import joblib
 import psycopg2
+from tasks import process_log_file
 from werkzeug.utils import secure_filename
 import csv
 from datetime import datetime
@@ -156,11 +157,11 @@ def analyze_zscaler():
 
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found"}), 404
-    job_id = uuid.uuid4()
+    job_id = str(uuid.uuid4())
     username = session['user']
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''INSERT INTO log_jobs (id, username, filename, status) VALUES (%s, %s,%s, %s)''', (job_id, username, filename, 'Pending'))
+    cursor.execute('''INSERT INTO log_jobs (id, username, filename, status) VALUES (%s, %s,%s, %s)''', (str(job_id), username, filename, 'Pending'))
     conn.commit()
     cursor.close()
     conn.close()
