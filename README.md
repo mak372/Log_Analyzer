@@ -1,65 +1,79 @@
-Log Analysis
+<h1>🔍 Log Analysis</h1>
 
-A full-stack asynchronous log analysis application that allows users to securely upload Zscaler-style log files and analyze them using a Flask-based API with Celery background workers.
-All parsed logs, job metadata, and analysis results are stored in a PostgreSQL database.
+<p>
+A full-stack <strong>asynchronous log analysis application</strong> that allows users to securely upload
+<strong>Zscaler-style log files</strong> and analyze them using a <strong>Flask-based API</strong> with
+<strong>Celery background workers</strong>.
+All parsed logs, job metadata, and analysis results are stored in a
+<strong>PostgreSQL</strong> database.
+</p>
 
-🔗 Live Link
+<hr />
 
-Click here to view the deployed application
+<h2>🧰 Tech Stack</h2>
+<ul>
+  <li><strong>Backend:</strong> Flask, Celery</li>
+  <li><strong>Messaging / Queue:</strong> Redis</li>
+  <li><strong>Database:</strong> PostgreSQL</li>
+  <li><strong>Authentication:</strong> Session-based authentication</li>
+</ul>
 
-Since the application is deployed on the free tier, the initial request may take a few seconds due to backend cold start.
-Features
-User Authentication
+<hr />
 
-Register and login functionality with hashed password storage.
+<h2>🔐 User Authentication</h2>
+<ul>
+  <li>Secure user registration and login with <strong>hashed password storage</strong></li>
+  <li><strong>Session-based authentication</strong> using secure cookies</li>
+  <li><strong>Protected API endpoints</strong> for authenticated users</li>
+  <li>Logout support</li>
+</ul>
 
-Session-based authentication using secure cookies.
+<hr />
 
-Protected API endpoints.
+<h2>📤 Log File Upload</h2>
+<ul>
+  <li>Secure file upload with server-side storage</li>
+  <li>Validation of uploaded files</li>
+  <li>Uploaded logs are <strong>queued for asynchronous processing</strong></li>
+</ul>
 
-Logout support.
+<hr />
 
-Log File Upload
+<h2>⚙️ Asynchronous Log Analysis</h2>
+<ul>
+  <li><strong>Non-blocking log processing</strong> using <strong>Celery + Redis</strong></li>
+  <li>Background workers parse and analyze logs independently of API requests</li>
+  <li>API remains responsive while long-running jobs execute</li>
+  <li>Architecture designed for <strong>scalability and fault isolation</strong></li>
+</ul>
 
-Secure file upload and server-side storage.
+<hr />
 
-Validation of uploaded files.
+<h2>🧾 Job Tracking &amp; Monitoring</h2>
+<ul>
+  <li>Each analysis request creates a <strong>unique job record</strong></li>
+  <li>Job metadata stored persistently in PostgreSQL</li>
+  <li>Supported job states:</li>
+  <ul>
+    <li><strong>Pending</strong></li>
+    <li><strong>Processing</strong></li>
+    <li><strong>Completed</strong></li>
+    <li><strong>Failed</strong></li>
+  </ul>
+  <li>Supports <strong>progress tracking</strong> and <strong>error reporting</strong></li>
+</ul>
 
-Uploaded files are queued for asynchronous processing.
+<hr />
 
-Asynchronous Log Analysis
+<h2>🛡️ Threat Analysis</h2>
+<ul>
+  <li>Parses <strong>Zscaler-style security logs</strong></li>
+  <li>Identifies <strong>blocked events</strong> and known threats</li>
+  <li>Stores structured log data in PostgreSQL for efficient querying</li>
+  <li>Enables <strong>historical threat analysis</strong> from stored logs</li>
+</ul>
 
-Non-blocking log processing using Celery + Redis.
-
-Background workers parse and analyze logs without blocking API requests.
-
-Job-based execution model with persistent tracking.
-
-Job Tracking
-
-Each analysis request creates a job record.
-
-Job status stored in the database:
-
-Pending
-
-Processing
-
-Completed
-
-Failed
-
-Supports progress tracking and error reporting.
-
-Threat Analysis
-
-Parses Zscaler-style logs.
-
-Identifies blocked events and threats.
-
-Stores structured log data in PostgreSQL.
-
-Enables historical analysis of blocked threats.
+<hr />
 
 <h2>Authentication</h2> <h3>POST /register</h3> <p>Register a new user.</p>
 
