@@ -1,4 +1,4 @@
-<h1>🔍 Log Analysis</h1>
+<h1>Log Analysis</h1>
 
 <p>
 A full-stack <strong>asynchronous log analysis application</strong> that allows users to securely upload
