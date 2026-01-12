@@ -4,6 +4,7 @@ from datetime import datetime
 
 @celery.task(bind=True)
 def process_log_file(self, job_id, username, filepath):
+    job_id = str(job_id)
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
