@@ -1,157 +1,105 @@
-# Log Analysis 
+Log Analysis
 
-A full-stack log analysis application. It allows users to securely upload Zscaler-style log files analyze threats using a Flask-based API server. All parsed logs and analysis results are stored in a PostgreSQL database.
+A full-stack asynchronous log analysis application that allows users to securely upload Zscaler-style log files and analyze them using a Flask-based API with Celery background workers.
+All parsed logs, job metadata, and analysis results are stored in a PostgreSQL database.
 
-### 🔗 Live Link
+🔗 Live Link
 
-[Click here to view the deployed application](https://log-analyzer-frontend.onrender.com/)
+Click here to view the deployed application
 
-#### Since the application is deployed on free tier it may take some time to load initially. The initial login may take a few seconds due to backend cold start on the free-tier deployment
+Since the application is deployed on the free tier, the initial request may take a few seconds due to backend cold start.
+Features
+User Authentication
 
----
+Register and login functionality with hashed password storage.
 
-## Features
+Session-based authentication using secure cookies.
 
-###  User Authentication
+Protected API endpoints.
 
-- **Register and login functionality** with hashed password storage.
-- **Session-based authentication.**
-- **Logout support.**
+Logout support.
 
-### Log File Upload
+Log File Upload
 
-- **Secure file upload** and storage.
-- **Parsing of Zscaler logs**.
-- **Storage of parsed logs** into a PostgreSQL database.
+Secure file upload and server-side storage.
 
-### Threat Analysis
+Validation of uploaded files.
 
-- **Summarizes top threats.**
-- **Identifies and lists blocked events** with and without threats.
-- **Provides insight into historical blocked logs** stored in the database.
+Uploaded files are queued for asynchronous processing.
 
----
+Asynchronous Log Analysis
 
-<h2> Authentication</h2>
+Non-blocking log processing using Celery + Redis.
 
-<h3> POST /register</h3>
-<p>Register a new user.</p>
+Background workers parse and analyze logs without blocking API requests.
+
+Job-based execution model with persistent tracking.
+
+Job Tracking
+
+Each analysis request creates a job record.
+
+Job status stored in the database:
+
+Pending
+
+Processing
+
+Completed
+
+Failed
+
+Supports progress tracking and error reporting.
+
+Threat Analysis
+
+Parses Zscaler-style logs.
+
+Identifies blocked events and threats.
+
+Stores structured log data in PostgreSQL.
+
+Enables historical analysis of blocked threats.
+
+<h2>Authentication</h2> <h3>POST /register</h3> <p>Register a new user.</p>
 
 <strong>Payload:</strong>
-<pre><code class="language-json">
-{
-  "username": "user1",
-  "password": "pass123"
-}
-</code></pre>
 
-<hr>
-
-<h3>POST /login</h3>
-<p>Login a user.</p>
+<pre><code class="language-json"> { "username": "user1", "password": "pass123" } </code></pre> <hr> <h3>POST /login</h3> <p>Login a user.</p>
 
 <strong>Payload:</strong>
-<pre><code class="language-json">
-{
-  "username": "user1",
-  "password": "pass123"
-}
-</code></pre>
+
+<pre><code class="language-json"> { "username": "user1", "password": "pass123" } </code></pre>
 
 <strong>Response:</strong>
-<ul>
-  <li><strong>Status:</strong> 200 OK</li>
-  <li><strong>Sets:</strong> A session cookie for authentication.</li>
-  <li><strong>Message:</strong> "Login successful" or appropriate error message.</li>
-</ul>
 
-<hr>
-
-<h3>GET /check-auth</h3>
-<p>Check if the user is currently logged in.</p>
+<ul> <li><strong>Status:</strong> 200 OK</li> <li><strong>Sets:</strong> Session cookie for authentication</li> <li><strong>Message:</strong> "Login successful" or appropriate error message</li> </ul> <hr> <h3>GET /check-auth</h3> <p>Check if the user is currently logged in.</p>
 
 <strong>Example Response:</strong>
-<pre><code class="language-json">
-{
-  "loggedIn": true,
-  "user": "user1"
-}
-</code></pre>
 
-<ul>
-  <li><strong>loggedIn:</strong> <code>true</code> if the user is logged in, <code>false</code> otherwise.</li>
-  <li><strong>user:</strong> The username of the currently logged-in user.</li>
-</ul>
-<h2> Log Upload & Analysis</h2>
-
-<h3> POST /upload</h3>
-<p>Upload a <code>.txt</code> log file.</p>
+<pre><code class="language-json"> { "loggedIn": true, "user": "user1" } </code></pre> <ul> <li><strong>loggedIn:</strong> <code>true</code> if authenticated</li> <li><strong>user:</strong> Current logged-in username</li> </ul>
+<h2>Log Upload & Asynchronous Analysis</h2> <h3>POST /upload</h3> <p>Upload a <code>.txt</code> log file.</p>
 
 <strong>Form-Data:</strong>
+
 <pre><code>file: &lt;your_file.txt&gt;</code></pre>
 
 <strong>Response:</strong>
-<pre><code class="language-json">
-{
-  "filename": "your_file.txt"
-}
-</code></pre>
 
-<hr>
-
-<h3> POST /analyze-zscaler</h3>
-<p>Parse and analyze the uploaded log file.</p>
+<pre><code class="language-json"> { "filename": "your_file.txt" } </code></pre> <hr> <h3>POST /analyze-zscaler</h3> <p> Queues the uploaded log file for <strong>asynchronous background analysis</strong>. The API immediately returns a job ID while the log is processed by a Celery worker. </p>
 
 <strong>Payload:</strong>
-<pre><code class="language-json">
-{
-  "filename": "your_file.txt"
-}
-</code></pre>
+
+<pre><code class="language-json"> { "filename": "your_file.txt" } </code></pre>
 
 <strong>Response:</strong>
-<pre><code class="language-json">
-{
-  "summary": {
-    "Blocked": 10,
-  },
-  "blocked_threats": [
-    {
-      "Threat_Name": "Malware",
-      "Action": "Blocked"
-      // ...
-    }
-  ],
-  "note": "Other blocked events that did not contain known threats."
-}
-</code></pre>
 
-<ul>
-  <li><strong>summary:</strong> Overview of the analysis.</li>
-  <li><strong>Blocked:</strong> The number of blocked threats.</li>
-  <li><strong>blocked_threats:</strong> A list of blocked threats, including threat name, action, and additional details.</li>
-  <li><strong>note:</strong> A note regarding other blocked events that may not be threats.</li>
-</ul>
-
-<hr>
-
-<h3> GET /analyze-db-logs</h3>
-<p>Fetch blocked threats from logs already stored in the database. Button wont be enabled till the database is empty</p>
+<pre><code class="language-json"> { "job_id": "7e51b456-5359-4000-b01b-bd1b5ac56327", "status": "Processing" } </code></pre> <ul> <li>The request returns immediately</li> <li>Log parsing happens asynchronously in the background</li> </ul> <hr> <h3>GET /job-status/&lt;job_id&gt;</h3> <p>Check the status and progress of an analysis job.</p>
 
 <strong>Response:</strong>
-<pre><code class="language-json">
-[
-  {
-    "Action": "Blocked",
-    "Threat_Name": "Malware"
-    // ...
-  }
-  // ...
-]
-</code></pre>
 
-<ul>
-  <li>Returns an array of blocked threat entries stored in the database.</li>
-  <li>Each entry includes information such as <code>Action</code> (Blocked/Allowed), <code>Threat_Name</code>, and other relevant fields.</li>
-</ul>
+<pre><code class="language-json"> { "status": "Completed", "progress": 100, "error": null } </code></pre> <ul> <li><strong>status:</strong> Pending / Processing / Completed / Failed</li> <li><strong>progress:</strong> Percentage of completion</li> <li><strong>error:</strong> Error message if the job failed</li> </ul> <hr> <h3>GET /analyze-db-logs</h3> <p>Fetch blocked threats from logs already stored in the database.</p>
 
+<strong>Response:</strong>
+
+<pre><code class="language-json"> [ { "Action": "Blocked", "Threat_Name": "Malware" // ... } ] </code></pre> <ul> <li>Returns historical blocked events</li> <li>Data is fetched directly from PostgreSQL</li> </ul>
