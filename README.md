@@ -10,7 +10,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 
 <hr />
 
-<h2>🧰 Tech Stack</h2>
+<h2>Tech Stack</h2>
 <ul>
   <li><strong>Backend:</strong> Flask, Celery</li>
   <li><strong>Messaging / Queue:</strong> Redis</li>
@@ -20,7 +20,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 
 <hr />
 
-<h2>🔐 User Authentication</h2>
+<h2>User Authentication</h2>
 <ul>
   <li>Secure user registration and login with <strong>hashed password storage</strong></li>
   <li><strong>Session-based authentication</strong> using secure cookies</li>
@@ -30,7 +30,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 
 <hr />
 
-<h2>📤 Log File Upload</h2>
+<h2>Log File Upload</h2>
 <ul>
   <li>Secure file upload with server-side storage</li>
   <li>Validation of uploaded files</li>
@@ -39,7 +39,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 
 <hr />
 
-<h2>⚙️ Asynchronous Log Analysis</h2>
+<h2>Asynchronous Log Analysis</h2>
 <ul>
   <li><strong>Non-blocking log processing</strong> using <strong>Celery + Redis</strong></li>
   <li>Background workers parse and analyze logs independently of API requests</li>
@@ -49,7 +49,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 
 <hr />
 
-<h2>🧾 Job Tracking &amp; Monitoring</h2>
+<h2>Job Tracking &amp; Monitoring</h2>
 <ul>
   <li>Each analysis request creates a <strong>unique job record</strong></li>
   <li>Job metadata stored persistently in PostgreSQL</li>
@@ -65,7 +65,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 
 <hr />
 
-<h2>🛡️ Threat Analysis</h2>
+<h2>Threat Analysis</h2>
 <ul>
   <li>Parses <strong>Zscaler-style security logs</strong></li>
   <li>Identifies <strong>blocked events</strong> and known threats</li>
