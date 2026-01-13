@@ -3,7 +3,7 @@ import axios from 'axios';
 import './FileUpload.css';
 import { useNavigate } from 'react-router-dom';
 
-const FileUpload: React.FC = () =>{
+const FileUpload: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploadMessage, setUploadMessage] = useState('');
   const [filename, setFilename] = useState('');
@@ -11,23 +11,22 @@ const FileUpload: React.FC = () =>{
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const navigate = useNavigate();
-  const [fileError, setFileError] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<string | null>(null);
 
+  
   // Check if user is authenticated
   useEffect(() => {
   const checkAuth = async () => {
-    try 
-    {
-      const res = await axios.get('https://log-analyzer-9z9j.onrender.com/check-auth', {
+    try {
+      const res = await axios.get('http://localhost:5000/check-auth', {
         withCredentials: true
       });
-      console.log(res.data);
+      console.log(res.data); // Check if loggedIn is true
       if (res.data.loggedIn) {
         setIsAuthenticated(true);
       }
-    } 
-    catch (err) 
-    {
+    } catch (err) {
       console.log(err);
       setIsAuthenticated(false);
     }
@@ -35,96 +34,109 @@ const FileUpload: React.FC = () =>{
   checkAuth();
 }, []);
 
+// Async logic
+useEffect(() => {
+  if (!jobId) return;
 
-  // Show loading while checking authentication
-  if (isAuthenticated === null) 
-  {
+  const interval = setInterval(async () => {
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/job-status/${jobId}`,
+        { withCredentials: true }
+      );
+
+      setJobStatus(res.data.status);
+
+      if (res.data.status === 'Completed') {
+        clearInterval(interval);
+
+        // Fetch final analysis
+        const finalRes = await axios.get(
+          'http://localhost:5000/analyze-db-logs',
+          { withCredentials: true }
+        );
+
+        setAnalysisResult(finalRes.data);
+      }
+
+      if (res.data.status === 'Failed') {
+        clearInterval(interval);
+        alert(res.data.error || 'Job failed');
+      }
+    } catch (err) {
+      clearInterval(interval);
+      console.error(err);
+    }
+  }, 2000);
+
+  return () => clearInterval(interval);
+}, [jobId]);
+
+
+
+  // Show loading while checking auth
+  if (isAuthenticated === null) {
     return <div>Checking authentication...</div>;
   }
 
-  // Redirect if user not logged in
-  if (isAuthenticated === false) 
-  {
+  // Redirect if not logged in
+  if (isAuthenticated === false) {
     navigate('/');
     return null;
   }
 
-  // Checking if the uploaded file is in txt format
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  if (e.target.files && e.target.files.length > 0)
-  {
-    const selectedFile = e.target.files[0];
-    const fileName = selectedFile.name;
-    if (!fileName.toLowerCase().endsWith('.txt')) 
-    {
-      setFile(null);
-      setFileError('Please upload a file in .txt format');
-    } 
-    else 
-    {
-      setFile(selectedFile);
-      setFileError('');
+    if (e.target.files && e.target.files.length > 0) {
+      setFile(e.target.files[0]);
     }
-  }
-  
-  // Uploading the file
+  };
+
   const handleUpload = async () => {
     if (!file) return;
+
     const formData = new FormData();
     formData.append('file', file);
-    try 
-    {
-      const response = await axios.post('https://log-analyzer-9z9j.onrender.com/upload', formData, { withCredentials: true });
+
+    try {
+      const response = await axios.post('http://localhost:5000/upload', formData, { withCredentials: true });
       setUploadMessage(response.data.message);
       setFilename(response.data.filename);
-    } 
-    catch (error: any) 
-    {
+    } catch (error: any) {
       setUploadMessage(error.response?.data?.message || 'Upload failed');
     }
   };
 
-  // Used to call the /analyze-zscaler API endpoint 
   const handleAnalyze = async () => {
     if (!filename) return;
 
-    try 
-    {
-      const response = await axios.post('https://log-analyzer-9z9j.onrender.com/analyze-zscaler', { filename }, { withCredentials: true });
-      setAnalysisResult(response.data);
-    } 
-    catch (error: any) 
-    {
+    try {
+      const response = await axios.post('http://localhost:5000/analyze-zscaler', { filename }, { withCredentials: true });
+      //setAnalysisResult(response.data);
+      setJobStatus(response.data.status);
+      setJobId(response.data.job_id);
+    } catch (error: any) {
       alert('Analysis failed: ' + (error.response?.data?.error || 'Unknown error'));
     }
   };
 
-  // Used to call /analyze-db-logs endpoint
   const handleDbAnalyze = async () => {
-    try 
-    {
-      const response = await axios.get('https://log-analyzer-9z9j.onrender.com/analyze-db-logs', { withCredentials: true });
+    try {
+      const response = await axios.get('http://localhost:5000/analyze-db-logs', { withCredentials: true });
       setDbLogs(response.data);
-    } 
-    catch (error: any) 
-    {
+    } catch (error: any) {
       alert('DB log analysis failed: ' + (error.response?.data?.error || 'Unknown error'));
     }
   };
-  
-    // Logout functionality
+
     const handleLogout = async () => {
-    try 
-    {
-      await axios.post('https://log-analyzer-9z9j.onrender.com/logout', {}, { withCredentials: true });
+    try {
+     await axios.post('http://localhost:5000/logout', {}, { withCredentials: true });
       setIsAuthenticated(false);
       navigate('/');
-    } 
-    catch (error) 
-    {
+    } catch (error) {
       console.error('Logout failed', error);
     }
-};
+  };
 
   return (
     <div className="upload-container">
@@ -139,7 +151,9 @@ const FileUpload: React.FC = () =>{
         filename && 
         (
           <div>
-            <button onClick={handleAnalyze}>Analyze File</button>
+            <button onClick={handleAnalyze} disabled={jobStatus === 'Pending' || jobStatus === 'Processing'}>
+              Analyze
+            </button>
           </div>
         )
       }
@@ -188,14 +202,14 @@ const FileUpload: React.FC = () =>{
         </tr>
       </thead>
       <tbody>
-        {analysisResult.blocked_threats.map((threat: any, index: number) => (
-          <tr key={index}>
-            <td>{threat.timestamp}</td>
-            <td>{threat.user}</td>
-            <td>{threat.url}</td>
-            <td>{threat.threat}</td>
-          </tr>
-        ))}
+       {Array.isArray(analysisResult?.blocked_threats) && analysisResult.blocked_threats.map((threat: any, index: number) => (
+    <tr key={index}>
+      <td>{threat.timestamp}</td>
+      <td>{threat.user}</td>
+      <td>{threat.url}</td>
+      <td>{threat.threat}</td>
+    </tr>
+      ))}
       </tbody>
     </table>
 
@@ -227,8 +241,9 @@ const FileUpload: React.FC = () =>{
   </div>
   
 )}
-</div>
-);
+    </div>
+    
+  );
 };
 
 export default FileUpload;
