@@ -17,11 +17,17 @@ from services import get_db_connection, parse_zscaler_log, save_logs_to_db
 
 
 app = Flask(__name__)
-app.secret_key = 'bd2b11b6619618c12fc9b7816c054cd15c6fb1b055a9652747b11cdb4fa23ceb'
-CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
+
+CORS(
+    app,
+    supports_credentials=True,
+    origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")]
+)
+
 make_celery(app)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:MastersUS24!123@localhost/log_analysis")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def requires_auth(f):
     @wraps(f)
