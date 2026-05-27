@@ -15,7 +15,7 @@ const Auth: React.FC = () => {
     // Login and register functionality
     try 
     {
-      const response = await axios.post(`https://log-analyzer-9z9j.onrender.com/${endpoint}`, {
+      const response = await axios.post(`http://localhost:5000/${endpoint}`, {
       username,
       password
       }, {withCredentials: true});

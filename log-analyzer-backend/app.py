@@ -14,6 +14,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from celery_app import make_celery
 import uuid
 from services import get_db_connection, parse_zscaler_log, save_logs_to_db
+from prometheus_flask_exporter import PrometheusMetrics
+from prometheus_client import REGISTRY
+from prometheus_client.core import GaugeMetricFamily
 
 
 app = Flask(__name__)
@@ -26,6 +29,45 @@ CORS(
 )
 
 make_celery(app)
+
+metrics = PrometheusMetrics(app)
+
+class CeleryJobCollector:
+    def collect(self):
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT status, COUNT(*) FROM log_jobs GROUP BY status")
+            g = GaugeMetricFamily('log_jobs_by_status', 'Log job count by status', labels=['status'])
+            for status, count in cursor.fetchall():
+                g.add_metric([status.lower()], float(count))
+            yield g
+
+            cursor.execute("""
+                SELECT AVG(EXTRACT(EPOCH FROM (completed_at - created_at)))
+                FROM log_jobs WHERE status = 'Completed' AND completed_at IS NOT NULL
+            """)
+            row = cursor.fetchone()
+            yield GaugeMetricFamily(
+                'log_jobs_avg_processing_seconds',
+                'Average job processing time in seconds',
+                value=float(row[0]) if row and row[0] else 0.0
+            )
+
+            cursor.execute("SELECT COUNT(*) FROM logs")
+            yield GaugeMetricFamily(
+                'logs_total_ingested',
+                'Total log events ingested into DB',
+                value=float(cursor.fetchone()[0])
+            )
+
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+
+REGISTRY.register(CeleryJobCollector())
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -193,14 +235,28 @@ def analyze_db_logs():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch only necessary fields from DB
     cursor.execute('''
-        SELECT timestamp,url,source_ip,threat
-        FROM logs 
+        SELECT timestamp, url, source_ip, threat, username
+        FROM logs
         WHERE action = 'Blocked'
+        ORDER BY timestamp DESC
         LIMIT 15
     ''')
     rows = cursor.fetchall()
+
+    cursor.execute("SELECT COUNT(*) FROM logs")
+    total_events = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM logs WHERE threat IS NOT NULL AND threat != 'None'")
+    total_threats = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT threat, COUNT(*) as cnt FROM logs
+        WHERE threat IS NOT NULL AND threat != 'None'
+        GROUP BY threat ORDER BY cnt DESC LIMIT 5
+    """)
+    top_threats = {row[0]: row[1] for row in cursor.fetchall()}
+
     cursor.close()
     conn.close()
 
@@ -209,11 +265,19 @@ def analyze_db_logs():
         blocked_threats.append({
             "timestamp": row[0],
             "url": row[1],
-            "source_ip":row[2],
-            "threat":row[3]
-            })
-    #print(blocked_threats)
-    return jsonify(blocked_threats)
+            "source_ip": row[2],
+            "threat": row[3],
+            "user": row[4]
+        })
+
+    return jsonify({
+        "summary": {
+            "total_events": total_events,
+            "total_threats": total_threats,
+            "top_threats": top_threats
+        },
+        "blocked_threats": blocked_threats
+    })
 
 @app.route('/logout', methods=['POST'])
 def logout():
