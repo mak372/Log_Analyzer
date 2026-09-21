@@ -15,7 +15,7 @@ All parsed logs, job metadata, and analysis results are stored in a
   <li><strong>Backend:</strong> Flask, Celery</li>
   <li><strong>Messaging / Queue:</strong> Redis</li>
   <li><strong>Database:</strong> PostgreSQL</li>
-  <li><strong>Authentication:</strong> Session-based authentication</li>
+  <li><strong>Authentication:</strong> JWT-based authentication</li>
 </ul>
 
 <hr />
@@ -23,7 +23,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 <h2>User Authentication</h2>
 <ul>
   <li>Secure user registration and login with <strong>hashed password storage</strong></li>
-  <li><strong>Session-based authentication</strong> using secure cookies</li>
+  <li><strong>JWT-based authentication</strong> using JWT tokens</li>
   <li><strong>Protected API endpoints</strong> for authenticated users</li>
   <li>Logout support</li>
 </ul>
@@ -75,23 +75,73 @@ All parsed logs, job metadata, and analysis results are stored in a
 
 <hr />
 
-<h2>Authentication</h2> <h3>POST /register</h3> <p>Register a new user.</p>
+<h2>Authentication</h2>
+
+<h3>POST /register</h3>
+<p>Register a new user.</p>
 
 <strong>Payload:</strong>
+<pre><code class="language-json">
+{
+  "username": "user1",
+  "password": "pass123"
+}
+</code></pre>
 
-<pre><code class="language-json"> { "username": "user1", "password": "pass123" } </code></pre> <hr> <h3>POST /login</h3> <p>Login a user.</p>
+<hr>
+
+<h3>POST /login</h3>
+<p>Login a user.</p>
 
 <strong>Payload:</strong>
-
-<pre><code class="language-json"> { "username": "user1", "password": "pass123" } </code></pre>
+<pre><code class="language-json">
+{
+  "username": "user1",
+  "password": "pass123"
+}
+</code></pre>
 
 <strong>Response:</strong>
+<pre><code class="language-json">
+{
+  "message": "Login successful",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+</code></pre>
 
-<ul> <li><strong>Status:</strong> 200 OK</li> <li><strong>Sets:</strong> Session cookie for authentication</li> <li><strong>Message:</strong> "Login successful" or appropriate error message</li> </ul> <hr> <h3>GET /check-auth</h3> <p>Check if the user is currently logged in.</p>
+<ul>
+  <li><strong>Status:</strong> 200 OK</li>
+  <li><strong>Returns:</strong> JWT token to be used for authenticating subsequent requests</li>
+  <li><strong>Message:</strong> "Login successful" or appropriate error message</li>
+</ul>
+
+<p>Include the token in the <code>Authorization</code> header for all authenticated requests:</p>
+<pre><code class="language-http">
+Authorization: Bearer &lt;token&gt;
+</code></pre>
+
+<hr>
+
+<h3>GET /check-auth</h3>
+<p>Check if the user is currently authenticated, based on the JWT token provided in the request header.</p>
+
+<strong>Request Header:</strong>
+<pre><code class="language-http">
+Authorization: Bearer &lt;token&gt;
+</code></pre>
 
 <strong>Example Response:</strong>
+<pre><code class="language-json">
+{
+  "loggedIn": true,
+  "user": "user1"
+}
+</code></pre>
 
-<pre><code class="language-json"> { "loggedIn": true, "user": "user1" } </code></pre> <ul> <li><strong>loggedIn:</strong> <code>true</code> if authenticated</li> <li><strong>user:</strong> Current logged-in username</li> </ul>
+<ul>
+  <li><strong>loggedIn:</strong> <code>true</code> if the token is valid and unexpired</li>
+  <li><strong>user:</strong> Username decoded from the JWT payload</li>
+</ul>
 <h2>Log Upload & Asynchronous Analysis</h2> <h3>POST /upload</h3> <p>Upload a <code>.txt</code> log file.</p>
 
 <strong>Form-Data:</strong>
