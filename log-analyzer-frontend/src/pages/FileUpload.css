@@ -145,3 +145,77 @@ td, th {
   padding: 8px;
 }
 
+.job-progress {
+  position: relative;
+  height: 24px;
+  margin: 10px 0;
+  background: #e6e6e6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.job-progress-bar {
+  height: 100%;
+  background: #007bff;
+  transition: width 0.4s ease;
+}
+
+.job-progress span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #222;
+}
+
+.live-alerts {
+  margin: 20px 0;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.live-alerts h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px 0;
+}
+
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #bbb;
+}
+
+.live-dot.connected {
+  background: #28a745;
+}
+
+.live-alerts ul {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.live-alerts li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 4px solid #b30000;
+}
+
+.alert-meta {
+  font-size: 13px;
+  color: #555;
+  word-break: break-all;
+}
+
+.upload-container p.live-alerts-empty {
+  color: #777;
+  font-size: 14px;
+}
+

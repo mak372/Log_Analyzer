@@ -13,8 +13,11 @@ const FileUpload: React.FC = () => {
   const navigate = useNavigate();
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [jobProgress, setJobProgress] = useState<number>(0);
+  const [liveAlerts, setLiveAlerts] = useState<any[]>([]);
+  const [alertsConnected, setAlertsConnected] = useState(false);
 
-  
+
   // Check if user is authenticated
   useEffect(() => {
   const checkAuth = async () => {
@@ -46,6 +49,7 @@ useEffect(() => {
       );
 
       setJobStatus(res.data.status);
+      setJobProgress(res.data.progress || 0);
 
       if (res.data.status === 'Completed') {
         clearInterval(interval);
@@ -71,6 +75,25 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, [jobId]);
+
+// Live threat alerts streamed from Kafka via Server-Sent Events
+useEffect(() => {
+  if (!isAuthenticated) return;
+
+  const source = new EventSource('http://localhost:5000/alerts/stream', { withCredentials: true });
+  source.onopen = () => setAlertsConnected(true);
+  source.onerror = () => setAlertsConnected(false); // EventSource reconnects automatically
+  source.onmessage = (event) => {
+    try {
+      const alert = JSON.parse(event.data);
+      setLiveAlerts((prev) => [alert, ...prev].slice(0, 50));
+    } catch (err) {
+      console.error('Bad alert payload', err);
+    }
+  };
+
+  return () => source.close();
+}, [isAuthenticated]);
 
 
 
@@ -113,6 +136,7 @@ useEffect(() => {
       const response = await axios.post('http://localhost:5000/analyze-zscaler', { filename }, { withCredentials: true });
       //setAnalysisResult(response.data);
       setJobStatus(response.data.status);
+      setJobProgress(0);
       setJobId(response.data.job_id);
     } catch (error: any) {
       alert('Analysis failed: ' + (error.response?.data?.error || 'Unknown error'));
@@ -157,6 +181,34 @@ useEffect(() => {
           </div>
         )
       }
+      {
+        (jobStatus === 'Pending' || jobStatus === 'Processing') &&
+        (
+          <div className="job-progress">
+            <div className="job-progress-bar" style={{ width: `${jobProgress}%` }} />
+            <span>{jobStatus}: {jobProgress}%</span>
+          </div>
+        )
+      }
+
+      <div className="live-alerts">
+        <h3>
+          Live Threat Alerts
+          <span className={`live-dot ${alertsConnected ? 'connected' : ''}`} title={alertsConnected ? 'Connected' : 'Disconnected'} />
+        </h3>
+        {liveAlerts.length === 0 ? (
+          <p className="live-alerts-empty">No threats detected yet. New threats appear here as they are ingested.</p>
+        ) : (
+          <ul>
+            {liveAlerts.map((alert, index) => (
+              <li key={index}>
+                <span className="threat-type">{alert.threat}</span>
+                <span className="alert-meta">{alert.source_ip} → {alert.url} ({alert.action}) · {alert.timestamp}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div>
         <button onClick={handleDbAnalyze}>View past events that were blocked</button>

@@ -13,7 +13,7 @@ All parsed logs, job metadata, and analysis results are stored in a
 <h2>Tech Stack</h2>
 <ul>
   <li><strong>Backend:</strong> Flask, Celery</li>
-  <li><strong>Messaging / Queue:</strong> Redis</li>
+  <li><strong>Messaging / Queue:</strong> Redis (Celery jobs), Apache Kafka (log event streaming)</li>
   <li><strong>Database:</strong> PostgreSQL</li>
   <li><strong>Authentication:</strong> Session-based authentication</li>
 </ul>
@@ -61,6 +61,38 @@ All parsed logs, job metadata, and analysis results are stored in a
     <li><strong>Failed</strong></li>
   </ul>
   <li>Supports <strong>progress tracking</strong> and <strong>error reporting</strong></li>
+</ul>
+
+<hr />
+
+<h2>Kafka Streaming Pipeline</h2>
+<pre><code>File upload ──► Celery task ─┐
+                             ├──► topic: zscaler.logs.raw ──┬──► consumer_storage.py ──► PostgreSQL (batch insert, job progress)
+POST /ingest (API key) ──────┘                              └──► consumer_threats.py ──► topic: threat.alerts ──► GET /alerts/stream (SSE) ──► live UI
+</code></pre>
+<ul>
+  <li>Uploaded files and live log sources go through the <strong>same pipeline</strong></li>
+  <li>Messages are keyed by <strong>source IP</strong>, so events from one host stay in order</li>
+  <li>Offsets are committed only after work is done (<strong>at-least-once</strong>): if Postgres is down, events wait in Kafka</li>
+  <li>A job is <strong>Completed</strong> once <code>processed_events</code> reaches <code>total_events</code></li>
+  <li>Consumer lag is exported to Prometheus via <code>kafka-exporter</code> (<code>kafka_consumergroup_lag</code>)</li>
+</ul>
+
+<h3>Running</h3>
+<pre><code>docker compose up -d            # Kafka, Kafka UI (localhost:8081), kafka-exporter, Prometheus, Grafana
+redis-server                    # Celery broker
+cd log-analyzer-backend
+python app.py
+celery -A tasks worker --loglevel=info --pool=solo   # --pool=solo on Windows
+python consumer_storage.py
+python consumer_threats.py
+</code></pre>
+
+<h3>Environment variables</h3>
+<ul>
+  <li><code>KAFKA_BOOTSTRAP_SERVERS</code> (default <code>localhost:9092</code>)</li>
+  <li><code>INGEST_API_KEY</code>: required to enable <code>POST /ingest</code></li>
+  <li>Optional: <code>KAFKA_RAW_LOGS_TOPIC</code>, <code>KAFKA_THREAT_ALERTS_TOPIC</code>, <code>KAFKA_TOPIC_PARTITIONS</code></li>
 </ul>
 
 <hr />
@@ -117,3 +149,15 @@ All parsed logs, job metadata, and analysis results are stored in a
 <strong>Response:</strong>
 
 <pre><code class="language-json"> [ { "Action": "Blocked", "Threat_Name": "Malware" // ... } ] </code></pre> <ul> <li>Returns historical blocked events</li> <li>Data is fetched directly from PostgreSQL</li> </ul>
+<hr>
+<h3>POST /ingest</h3> <p>Stream log lines into Kafka from machines or log shippers. Authenticated with the <code>X-API-Key</code> header (value of <code>INGEST_API_KEY</code>), not a session.</p>
+
+<strong>Body:</strong> <code>text/plain</code> with one Zscaler CSV line per line, or JSON:
+
+<pre><code class="language-json"> { "lines": ["\"Mon May 05 10:15:23 2025\",\"alice\",..."] } </code></pre>
+
+<strong>Response (202):</strong>
+
+<pre><code class="language-json"> { "accepted": 98, "rejected": 2 } </code></pre> <ul> <li>At most 10,000 lines per request</li> <li>Returns 503 if Kafka is unreachable</li> </ul>
+<hr>
+<h3>GET /alerts/stream</h3> <p>Server-Sent Events stream of live threat alerts (requires login). Each <code>data:</code> message is a parsed log event with a non-empty threat.</p>
