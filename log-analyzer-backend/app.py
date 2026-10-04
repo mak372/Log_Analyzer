@@ -13,7 +13,13 @@ from collections import defaultdict
 from werkzeug.security import generate_password_hash, check_password_hash
 from celery_app import make_celery
 import uuid
-from services import get_db_connection, parse_zscaler_log, save_logs_to_db
+from services import get_db_connection, parse_zscaler_log, parse_zscaler_line, save_logs_to_db
+from kafka_client import (
+    THREAT_ALERTS_TOPIC, create_consumer, ensure_topics, flush_producer, produce_raw_log,
+)
+import hmac
+import time
+from flask import Response
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import REGISTRY
 from prometheus_client.core import GaugeMetricFamily
@@ -120,6 +126,9 @@ def create_log_jobs_table():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS log_jobs (id UUID PRIMARY KEY,username TEXT,filename TEXT, status TEXT, progress INTEGER DEFAULT 0, error TEXT,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,completed_at TIMESTAMP)''')
+    # Kafka pipeline: the producer sets total_events, the storage consumer increments processed_events.
+    cursor.execute('ALTER TABLE log_jobs ADD COLUMN IF NOT EXISTS total_events INTEGER')
+    cursor.execute('ALTER TABLE log_jobs ADD COLUMN IF NOT EXISTS processed_events INTEGER DEFAULT 0')
     conn.commit()
     cursor.close()
     conn.close()
@@ -127,6 +136,12 @@ def create_log_jobs_table():
 create_logs_table()
 create_users_table()
 create_log_jobs_table()
+
+try:
+    ensure_topics()
+except Exception as e:
+    # Don't block the API from starting; ingestion and alerts will fail until Kafka is reachable.
+    print(f"Warning: could not verify Kafka topics: {e}")
 
 @app.route('/')
 def home():
@@ -221,13 +236,14 @@ def analyze_zscaler():
 def job_status(job_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''SELECT status, progress,error FROM log_jobs WHERE id=%s''', (job_id,))
+    cursor.execute('''SELECT status, progress, error, processed_events, total_events FROM log_jobs WHERE id=%s''', (job_id,))
     job = cursor.fetchone()
     cursor.close()
     conn.close()
     if not job:
         return jsonify({"error": "Job not found"}), 404
-    return jsonify({"status": job[0],"progress": job[1],"error": job[2]}), 200
+    return jsonify({"status": job[0],"progress": job[1],"error": job[2],
+                    "processed_events": job[3],"total_events": job[4]}), 200
 
 @app.route('/analyze-db-logs', methods=['GET'])
 @requires_auth
@@ -278,6 +294,79 @@ def analyze_db_logs():
         },
         "blocked_threats": blocked_threats
     })
+
+INGEST_API_KEY = os.getenv("INGEST_API_KEY")
+MAX_INGEST_LINES = 10000
+
+@app.route('/ingest', methods=['POST'])
+def ingest():
+    """Machine-to-machine log ingestion. Authenticated with the X-API-Key header, not a session.
+
+    Accepts either text/plain (one Zscaler CSV line per line) or JSON {"lines": [...]}.
+    """
+    if not INGEST_API_KEY:
+        return jsonify({"error": "Ingestion is disabled: INGEST_API_KEY is not set"}), 503
+    provided = request.headers.get("X-API-Key", "")
+    if not hmac.compare_digest(provided.encode(), INGEST_API_KEY.encode()):
+        return jsonify({"error": "Invalid API key"}), 401
+
+    if request.is_json:
+        lines = (request.get_json(silent=True) or {}).get("lines")
+        if not isinstance(lines, list):
+            return jsonify({"error": "Expected JSON body {\"lines\": [...]}"}), 400
+    else:
+        lines = request.get_data(as_text=True).splitlines()
+
+    if len(lines) > MAX_INGEST_LINES:
+        return jsonify({"error": f"Too many lines; send at most {MAX_INGEST_LINES} per request"}), 413
+
+    accepted = rejected = 0
+    for line in lines:
+        event = parse_zscaler_line(line) if isinstance(line, str) else None
+        if event is None:
+            rejected += 1
+            continue
+        produce_raw_log(line, source='ingest', key=event["source_ip"])
+        accepted += 1
+
+    if flush_producer(timeout=10):
+        return jsonify({"error": "Kafka is unavailable; events were not accepted"}), 503
+    return jsonify({"accepted": accepted, "rejected": rejected}), 202
+
+
+@app.route('/alerts/stream', methods=['GET'])
+@requires_auth
+def alerts_stream():
+    """Server-Sent Events stream of live threat alerts from Kafka."""
+    def generate():
+        # A unique group per connection so every open dashboard receives every alert.
+        consumer = create_consumer(
+            f"alerts-sse-{uuid.uuid4()}",
+            auto_offset_reset="latest",
+            **{"enable.auto.commit": True},
+        )
+        consumer.subscribe([THREAT_ALERTS_TOPIC])
+        last_sent = time.monotonic()
+        try:
+            yield ": connected\n\n"
+            while True:
+                msg = consumer.poll(1.0)
+                if msg is not None and not msg.error():
+                    yield f"data: {msg.value().decode('utf-8')}\n\n"
+                    last_sent = time.monotonic()
+                elif time.monotonic() - last_sent > 15:
+                    # Heartbeat keeps proxies from closing the connection and detects closed clients.
+                    yield ": ping\n\n"
+                    last_sent = time.monotonic()
+        finally:
+            consumer.close()
+
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
+    )
+
 
 @app.route('/logout', methods=['POST'])
 def logout():

@@ -5,3 +5,8 @@ scrape_configs:
   - job_name: 'flask'
     static_configs:
       - targets: ['host.docker.internal:5000']
+
+  # Topic offsets and consumer group lag (kafka_consumergroup_lag)
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
